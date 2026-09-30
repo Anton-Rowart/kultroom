@@ -1,5 +1,5 @@
 (() => {
-  const bridgeVersion = "0.4.1";
+  const bridgeVersion = "0.4.2";
 
   if (globalThis.__kultPlayerBridgeInstalled === bridgeVersion) {
     return;

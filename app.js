@@ -37,10 +37,16 @@ function createRoomId() {
   return String(100000 + (bytes[0] % 900000));
 }
 
+function createRandomToken() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function getOrCreateUserId() {
   let value = sessionStorage.getItem("kult-user-id");
   if (!value) {
-    value = crypto.randomUUID();
+    value = createRandomToken();
     sessionStorage.setItem("kult-user-id", value);
   }
   return value;
@@ -288,7 +294,7 @@ elements.lobbyForm.addEventListener("submit", (event) => {
       return;
     }
     roomId = createRoomId();
-    hostToken = crypto.randomUUID();
+    hostToken = createRandomToken();
     sessionStorage.setItem(`kult-host-token:${roomId}`, hostToken);
     pendingEntrance = { type: "CREATE", roomId, userId, name: userName, videoUrl, hostToken };
   }

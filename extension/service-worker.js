@@ -8,7 +8,7 @@ function isKultSiteUrl(urlString) {
   try {
     const url = new URL(urlString);
     return url.protocol === "http:"
-      && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+      && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.host === "194.226.165.6:8787");
   } catch {
     return false;
   }
