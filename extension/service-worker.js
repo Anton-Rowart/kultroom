@@ -60,7 +60,7 @@ async function inspectTabBridge(tabId, topUrl) {
   const playerConnected = results.some((result) => result.status === "fulfilled" && result.value?.videoCount > 0);
   const activationRequired = results.some((result) => result.status === "fulfilled"
     && result.value?.videoCount > 0
-    && result.value?.userActivation?.hasBeenActive === false);
+    && result.value?.activationState !== "active");
   await setActionState(tabId, activationRequired ? "permission" : playerConnected ? "ready" : "waiting");
   return { active: true, playerConnected, activationRequired, missingOrigins: [] };
 }
@@ -122,6 +122,19 @@ async function handleTelemetry(message, sender) {
   return { ok: true };
 }
 
+async function handleActivationState(message, sender) {
+  const tabId = sender.tab?.id;
+  if (tabId == null || !isKultSiteUrl(sender.tab?.url)) return { ok: false, ignored: true };
+  await setActionState(tabId, message.activated ? "ready" : "permission");
+  await chrome.tabs.sendMessage(tabId, {
+    source: "kult-player-bridge",
+    type: "forward-activation-state",
+    state: message.state,
+    activated: message.activated === true
+  }, { frameId: 0 });
+  return { ok: true };
+}
+
 chrome.webNavigation.onCommitted?.addListener((details) => {
   if (details.frameId === 0) setActionState(details.tabId, isKultSiteUrl(details.url) ? "waiting" : "off");
 });
@@ -138,6 +151,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "telemetry") {
     handleTelemetry(message, sender).then(sendResponse).catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (message.type === "activation-state") {
+    handleActivationState(message, sender).then(sendResponse).catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
   }
 

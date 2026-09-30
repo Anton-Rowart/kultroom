@@ -316,6 +316,18 @@ window.addEventListener("message", (event) => {
     }
   }
   if (event.data?.source === "kult-extension" && event.data.type === "player-event") sendPlayerEvent(event.data.event);
+  if (event.data?.source === "kult-extension" && event.data.type === "activation-state") {
+    if (event.data.state === "activating") {
+      elements.playerStatus.textContent = "Подготавливаем плеер…";
+    } else if (event.data.activated) {
+      elements.playerStatus.textContent = "Плеер активирован · 00:00 · пауза";
+      lastBridgeNotice = "ready";
+      showToast("Плеер активирован и готов");
+    } else {
+      elements.playerStatus.textContent = "Нажмите «Активировать плеер»";
+      lastBridgeNotice = "activation";
+    }
+  }
   if (event.data?.source === "kult-extension" && event.data.type === "telemetry" && roomJoined) {
     send({ type: "TELEMETRY", roomId, telemetry: { ...event.data.telemetry, ping: socketPing } });
   }

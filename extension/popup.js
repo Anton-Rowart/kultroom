@@ -38,7 +38,13 @@ async function inspect() {
     return;
   }
 
-  const needsActivation = players.some((player) => player.userActivation?.hasBeenActive === false);
+  const activating = players.some((player) => player.activationState === "activating");
+  if (activating) {
+    setStatus("Активируем плеер", "Останавливаем видео на 00:00");
+    return;
+  }
+
+  const needsActivation = players.some((player) => player.activationState !== "active");
   if (needsActivation) {
     setStatus("Нужна активация", "Нажмите кнопку внутри плеера");
     return;

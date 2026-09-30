@@ -1,5 +1,5 @@
 (() => {
-  const bridgeVersion = "0.5.0";
+  const bridgeVersion = "0.5.1";
 
   if (globalThis.__kultPlayerBridgeInstalled === bridgeVersion) {
     return;
@@ -12,6 +12,10 @@
   const playbackHealth = new WeakMap();
   let applyingRemoteCommand = 0;
   let suppressEventsUntil = 0;
+  let playerActivationState = "required";
+  let activationResetting = false;
+  let activationPlaybackObserved = false;
+  let activationLastMotionAt = 0;
   const playControlSelectors = [
     "button[data-allplay='play']",
     ".allplay__control--overlaid",
@@ -92,13 +96,34 @@
 
     observedVideos.add(video);
     playbackHealth.set(video, { buffering: video.readyState < 2 });
-    video.addEventListener("play", () => emitPlayerEvent("play", video));
+    video.addEventListener("play", () => {
+      if (activationResetting) {
+        activationPlaybackObserved = true;
+        activationLastMotionAt = Date.now();
+        resetVideo(video);
+        return;
+      }
+      emitPlayerEvent("play", video);
+    });
     video.addEventListener("pause", () => emitPlayerEvent("pause", video));
     video.addEventListener("seeked", () => emitPlayerEvent("seek", video));
     video.addEventListener("ratechange", () => emitPlayerEvent("ratechange", video));
     video.addEventListener("waiting", () => { playbackHealth.get(video).buffering = true; });
     video.addEventListener("stalled", () => { playbackHealth.get(video).buffering = true; });
-    video.addEventListener("playing", () => { playbackHealth.get(video).buffering = false; });
+    video.addEventListener("playing", () => {
+      playbackHealth.get(video).buffering = false;
+      if (activationResetting) {
+        activationPlaybackObserved = true;
+        activationLastMotionAt = Date.now();
+        resetVideo(video);
+      }
+    });
+    video.addEventListener("timeupdate", () => {
+      if (activationResetting && video.currentTime > 0.05) {
+        activationLastMotionAt = Date.now();
+        resetVideo(video);
+      }
+    });
     video.addEventListener("canplay", () => { playbackHealth.get(video).buffering = false; });
   }
 
@@ -149,9 +174,23 @@
       observeVideo(video);
     }
 
-    if (window !== window.top && videos.length > 0 && navigator.userActivation?.hasBeenActive !== true) {
+    if (window !== window.top && videos.length > 0 && playerActivationState !== "active") {
       showUnlockButton();
     }
+  }
+
+  function resetVideo(video) {
+    try { video.pause(); } catch {}
+    try { video.currentTime = 0; } catch {}
+  }
+
+  function announceActivationState() {
+    chrome.runtime.sendMessage({
+      source: "kult-player-bridge",
+      type: "activation-state",
+      state: playerActivationState,
+      activated: playerActivationState === "active"
+    }).catch(() => {});
   }
 
   function runAsRemoteCommand(callback) {
@@ -278,13 +317,15 @@
         hasBeenActive: navigator.userActivation?.hasBeenActive ?? null,
         isActive: navigator.userActivation?.isActive ?? null
       },
+      activationState: playerActivationState,
+      activated: playerActivationState === "active",
       playControls: findPlayControls().slice(0, 8).map(describeControl),
       videos: videos.map(describeVideo)
     };
   }
 
   function showUnlockButton() {
-    if (navigator.userActivation?.hasBeenActive === true || document.getElementById(unlockButtonId)) {
+    if (playerActivationState === "active" || document.getElementById(unlockButtonId)) {
       return;
     }
 
@@ -309,9 +350,7 @@
       "padding:24px",
       "place-items:center",
       "border:0",
-      "background:rgba(6,6,8,.32)",
-      "backdrop-filter:blur(22px) saturate(.75)",
-      "-webkit-backdrop-filter:blur(22px) saturate(.75)",
+      "background:#050505",
       "cursor:pointer"
     ].join(";");
 
@@ -321,35 +360,59 @@
       button.disabled = true;
       button.innerHTML = "<span style=\"padding:16px 20px;border-radius:18px;background:rgba(20,20,22,.82);color:#fff;font:600 14px system-ui\">Подготавливаем видео…</span>";
 
+      playerActivationState = "activating";
+      activationResetting = true;
+      activationPlaybackObserved = false;
+      activationLastMotionAt = Date.now();
+      announceActivationState();
       applyingRemoteCommand += 1;
-      suppressEventsUntil = Date.now() + 1500;
+      suppressEventsUntil = Date.now() + 15000;
 
       try {
         const hasPlayerControl = findPlayControls().length > 0;
-        const videos = getTargetVideos();
+        let videos = getTargetVideos();
 
         if (hasPlayerControl) {
           clickPlayerPlayControl();
         } else {
-          await Promise.all(videos.map((video) => video.play()));
+          await Promise.allSettled(videos.map((video) => video.play()));
         }
 
         const startedAt = Date.now();
-        while (videos.every((video) => video.paused) && Date.now() - startedAt < 2000) {
+        while (!activationPlaybackObserved && Date.now() - startedAt < 10000) {
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        if (hasPlayerControl) {
-          clickPlayerPauseControl();
+        if (!activationPlaybackObserved) {
+          throw new DOMException("Плеер не подтвердил активацию", "TimeoutError");
         }
 
-        for (const video of videos) {
-          video.pause();
-          try { video.currentTime = 0; } catch {}
+        activationLastMotionAt = Date.now();
+        while (Date.now() - activationLastMotionAt < 1500) {
+          videos = getTargetVideos();
+          let moved = false;
+          for (const video of videos) {
+            if (!video.paused || video.currentTime > 0.05) moved = true;
+            resetVideo(video);
+          }
+          if (moved) activationLastMotionAt = Date.now();
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
+        videos = getTargetVideos();
+        for (const video of videos) resetVideo(video);
+        if (videos.some((video) => !video.paused || video.currentTime > 0.05)) {
+          throw new DOMException("Не удалось остановить плеер на 00:00", "InvalidStateError");
+        }
+
+        activationResetting = false;
+        playerActivationState = "active";
+        announceActivationState();
         button.remove();
       } catch (error) {
+        activationResetting = false;
+        playerActivationState = "required";
+        announceActivationState();
         button.disabled = false;
         button.innerHTML = `<span style="padding:16px 20px;border-radius:18px;background:rgba(20,20,22,.88);color:#fff;font:600 14px system-ui">Не получилось. Нажмите ещё раз</span>`;
       } finally {
@@ -534,6 +597,17 @@
 
     if (message.type === "forward-telemetry" && window === window.top) {
       window.postMessage({ source: "kult-extension", type: "telemetry", telemetry: message.telemetry }, location.origin);
+      sendResponse({ ok: true });
+      return undefined;
+    }
+
+    if (message.type === "forward-activation-state" && window === window.top) {
+      window.postMessage({
+        source: "kult-extension",
+        type: "activation-state",
+        state: message.state,
+        activated: message.activated === true
+      }, location.origin);
       sendResponse({ ok: true });
       return undefined;
     }
