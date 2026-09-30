@@ -6,6 +6,7 @@ const elements = {
   lobbyTitle: document.querySelector("#lobby-title"), participants: document.querySelector("#participants"), participantCount: document.querySelector("#participant-count"),
   playerStatus: document.querySelector("#player-status"), roomCode: document.querySelector("#room-code"), sessionName: document.querySelector("#session-name"),
   shareRoom: document.querySelector("#share-room"), toast: document.querySelector("#toast"), toggle: document.querySelector("#panel-toggle"),
+  closePanel: document.querySelector("#panel-close"),
   urlError: document.querySelector("#url-error"), videoUrl: document.querySelector("#video-url")
 };
 
@@ -72,17 +73,23 @@ function showToast(message) {
 }
 
 function setConnection(state, text) {
-  elements.connection.dataset.state = state;
-  elements.connectionText.textContent = text;
+  if (elements.connection) elements.connection.dataset.state = state;
+  if (elements.connectionText) elements.connectionText.textContent = text;
+}
+
+function setPlayerStatus(text) {
+  if (elements.playerStatus) elements.playerStatus.textContent = text;
 }
 
 function configureLobby() {
   elements.sessionName.value = userName;
   const joining = Boolean(roomId);
   elements.lobbyTitle.textContent = joining ? `Войти в комнату ${roomId}` : "Создать комнату";
-  elements.lobbyDescription.textContent = joining
-    ? "Введите имя для этой сессии. После входа вы увидите фильм и участников."
-    : "Назовитесь, добавьте ссылку на фильм и отправьте комнату друзьям.";
+  if (elements.lobbyDescription) {
+    elements.lobbyDescription.textContent = joining
+      ? "Введите имя для этой сессии. После входа вы увидите фильм и участников."
+      : "Назовитесь, добавьте ссылку на фильм и отправьте комнату друзьям.";
+  }
   elements.createVideoField.hidden = joining;
   elements.createVideoUrl.required = !joining;
   elements.lobbySubmit.textContent = joining ? "Войти в комнату" : "Создать комнату";
@@ -110,7 +117,7 @@ function renderVideoUrl(url) {
   elements.guestVideoLink.textContent = parsed;
   if (changed) {
     elements.frame.src = parsed;
-    elements.playerStatus.textContent = "Плеер загружается…";
+    setPlayerStatus("Плеер загружается…");
   }
   return true;
 }
@@ -289,9 +296,9 @@ function handleMessage(message) {
 function sendPlayerEvent(event) {
   if (!roomJoined || !["play", "pause", "seek"].includes(event.action)) return;
   const position = Number(event.position) || 0;
-  elements.playerStatus.textContent = event.action === "play"
+  setPlayerStatus(event.action === "play"
     ? `Воспроизведение · ${position.toFixed(1)} сек`
-    : event.action === "pause" ? `Пауза · ${position.toFixed(1)} сек` : `Перемотка · ${position.toFixed(1)} сек`;
+    : event.action === "pause" ? `Пауза · ${position.toFixed(1)} сек` : `Перемотка · ${position.toFixed(1)} сек`);
   send({ type: "PLAYER_EVENT", roomId, event: { action: event.action, position, emittedAt: event.emittedAt || Date.now() } });
 }
 
@@ -301,30 +308,30 @@ window.addEventListener("message", (event) => {
     extensionBridgeReady = true;
     const status = event.data.status || {};
     if (status.missingOrigins?.length) {
-      elements.playerStatus.textContent = "Расширению нужен доступ к видеоплееру";
+      setPlayerStatus("Расширению нужен доступ к видеоплееру");
       if (lastBridgeNotice !== "permission") showToast("Откройте расширение и разрешите доступ к плееру");
       lastBridgeNotice = "permission";
     } else if (status.activationRequired) {
-      elements.playerStatus.textContent = "Нажмите «Активировать видео» внутри плеера";
+      setPlayerStatus("Нажмите «Активировать видео» внутри плеера");
       if (lastBridgeNotice !== "activation") showToast("Один раз активируйте видео в плеере");
       lastBridgeNotice = "activation";
     } else if (status.playerConnected) {
-      elements.playerStatus.textContent = "Расширение и плеер подключены";
+      setPlayerStatus("Расширение и плеер подключены");
       lastBridgeNotice = "ready";
     } else {
-      elements.playerStatus.textContent = "Расширение подключено · плеер загружается";
+      setPlayerStatus("Расширение подключено · плеер загружается");
     }
   }
   if (event.data?.source === "kult-extension" && event.data.type === "player-event") sendPlayerEvent(event.data.event);
   if (event.data?.source === "kult-extension" && event.data.type === "activation-state") {
     if (event.data.state === "activating") {
-      elements.playerStatus.textContent = "Подготавливаем плеер…";
+      setPlayerStatus("Подготавливаем плеер…");
     } else if (event.data.activated) {
-      elements.playerStatus.textContent = "Плеер активирован · 00:00 · пауза";
+      setPlayerStatus("Плеер активирован · 00:00 · пауза");
       lastBridgeNotice = "ready";
       showToast("Плеер активирован и готов");
     } else {
-      elements.playerStatus.textContent = "Нажмите «Активировать плеер»";
+      setPlayerStatus("Нажмите «Активировать плеер»");
       lastBridgeNotice = "activation";
     }
   }
@@ -360,9 +367,13 @@ elements.lobbyForm.addEventListener("submit", (event) => {
 });
 
 elements.toggle.addEventListener("click", () => {
-  const collapsed = document.body.classList.toggle("panel-collapsed");
-  elements.toggle.setAttribute("aria-expanded", String(!collapsed));
-  elements.toggle.setAttribute("aria-label", collapsed ? "Открыть комнату" : "Скрыть комнату");
+  document.body.classList.remove("panel-collapsed");
+  elements.toggle.setAttribute("aria-expanded", "true");
+});
+
+elements.closePanel.addEventListener("click", () => {
+  document.body.classList.add("panel-collapsed");
+  elements.toggle.setAttribute("aria-expanded", "false");
 });
 
 function applyVideoUrl() {
@@ -405,7 +416,7 @@ function pingExtensionBridge() {
 setInterval(pingExtensionBridge, 1500);
 setInterval(() => { if (roomJoined) send({ type: "PING", sentAt: Date.now() }); }, 5000);
 setTimeout(() => {
-  if (roomJoined && !extensionBridgeReady) elements.playerStatus.textContent = "Расширение не подключено · установите или обновите его";
+  if (roomJoined && !extensionBridgeReady) setPlayerStatus("Расширение не подключено · установите или обновите его");
 }, 4000);
 
 configureLobby();
