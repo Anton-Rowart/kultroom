@@ -1,5 +1,5 @@
 (() => {
-  const bridgeVersion = "0.4.2";
+  const bridgeVersion = "0.4.4";
 
   if (globalThis.__kultPlayerBridgeInstalled === bridgeVersion) {
     return;
@@ -238,7 +238,7 @@
   }
 
   function showUnlockButton() {
-    if (document.getElementById(unlockButtonId)) {
+    if (navigator.userActivation?.hasBeenActive === true || document.getElementById(unlockButtonId)) {
       return;
     }
 
@@ -290,7 +290,10 @@
           await Promise.all(videos.map((video) => video.play()));
         }
 
-        await waitForPlaybackState(true, 5000);
+        const startedAt = Date.now();
+        while (videos.every((video) => video.paused) && Date.now() - startedAt < 2000) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
 
         if (hasPlayerControl) {
           clickPlayerPauseControl();
@@ -298,7 +301,6 @@
           for (const video of videos) video.pause();
         }
 
-        await waitForPlaybackState(false, 1800);
         button.remove();
       } catch (error) {
         button.disabled = false;
@@ -393,16 +395,18 @@
     });
   }
 
-  observeAllVideos();
-
   const videoObserver = new MutationObserver(() => {
     observeAllVideos();
   });
 
-  videoObserver.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
+  chrome.runtime.sendMessage({
+    source: "kult-player-bridge",
+    type: "context-check"
+  }).then((status) => {
+    if (!status?.active) return;
+    observeAllVideos();
+    videoObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }).catch(() => {});
 
   if (window === window.top) {
     function announceBridge() {

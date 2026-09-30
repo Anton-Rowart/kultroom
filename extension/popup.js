@@ -11,6 +11,17 @@ const elements = {
 let activeTab = null;
 let frames = [];
 let controllableFrames = [];
+const kultSiteOrigin = "http://194.226.165.6:8787";
+const allowedOrigins = new Set([
+  `${kultSiteOrigin}/*`,
+  "https://bulkikim.lol/*",
+  "https://theatre.stravers.live/*"
+]);
+
+function isKultSiteUrl(urlString) {
+  try { return new URL(urlString).origin === kultSiteOrigin; }
+  catch { return false; }
+}
 
 function toOriginPattern(urlString) {
   try {
@@ -27,7 +38,7 @@ function toOriginPattern(urlString) {
 }
 
 function uniqueOriginPatterns(frameList) {
-  return [...new Set(frameList.map((frame) => toOriginPattern(frame.url)).filter(Boolean))];
+  return [...new Set(frameList.map((frame) => toOriginPattern(frame.url)).filter((origin) => allowedOrigins.has(origin)))];
 }
 
 async function getMissingOrigins(origins) {
@@ -108,6 +119,10 @@ async function loadFrames() {
     throw new Error("Не удалось определить активную вкладку");
   }
 
+  if (!isKultSiteUrl(tab.url)) {
+    throw new Error("Расширение работает только на 194.226.165.6:8787");
+  }
+
   activeTab = tab;
   frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
   renderOrigins();
@@ -129,6 +144,10 @@ async function injectIntoGrantedFrames() {
   const errors = [];
 
   for (const frame of frames) {
+    if (!allowedOrigins.has(toOriginPattern(frame.url))) {
+      continue;
+    }
+
     if (!(await hasOriginAccess(frame.url))) {
       continue;
     }
@@ -265,13 +284,7 @@ async function connect() {
     }
 
     const missingOrigins = await getMissingOrigins(origins);
-    const granted = missingOrigins.length === 0
-      ? true
-      : await chrome.permissions.request({ origins: missingOrigins });
-
-    if (!granted) {
-      throw new Error("Доступ к доменам не предоставлен");
-    }
+    if (missingOrigins.length > 0) throw new Error("Перезагрузите расширение, чтобы применить доступ к плееру");
 
     setStatus("Подключаю скрипт к iframe…");
     const injection = await injectIntoGrantedFrames();

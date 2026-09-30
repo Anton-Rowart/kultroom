@@ -1,4 +1,3 @@
-const observerScriptId = "kult-player-observer";
 const staticObserverOrigins = new Set([
   "https://bulkikim.lol/*",
   "https://theatre.stravers.live/*"
@@ -7,8 +6,7 @@ const staticObserverOrigins = new Set([
 function isKultSiteUrl(urlString) {
   try {
     const url = new URL(urlString);
-    return url.protocol === "http:"
-      && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.host === "194.226.165.6:8787");
+    return url.protocol === "http:" && url.host === "194.226.165.6:8787";
   } catch {
     return false;
   }
@@ -23,6 +21,7 @@ async function setActionState(tabId, state) {
   };
   const value = states[state] || states.off;
   await Promise.allSettled([
+    state === "off" ? chrome.action.disable(tabId) : chrome.action.enable(tabId),
     chrome.action.setBadgeText({ tabId, text: value.text }),
     chrome.action.setBadgeBackgroundColor({ tabId, color: value.color }),
     chrome.action.setTitle({ tabId, title: value.title })
@@ -42,7 +41,7 @@ async function inspectTabBridge(tabId, topUrl) {
       try { const url = new URL(frame.url); return /^https?:$/.test(url.protocol) ? `${url.origin}/*` : null; }
       catch { return null; }
     })
-    .filter(Boolean))];
+    .filter((origin) => origin && staticObserverOrigins.has(origin)))];
   const missingOrigins = [];
   for (const origin of nestedOrigins) {
     if (!(await chrome.permissions.contains({ origins: [origin] }))) missingOrigins.push(origin);
@@ -66,75 +65,21 @@ async function inspectTabBridge(tabId, topUrl) {
   return { active: true, playerConnected, activationRequired, missingOrigins: [] };
 }
 
-function supportedOrigins(origins = []) {
-  return [...new Set(origins.filter((origin) => {
-    if (!/^https?:\/\//.test(origin)) {
-      return false;
-    }
-
-    return !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(origin)
-      && !staticObserverOrigins.has(origin);
-  }))];
-}
-
-async function syncObserverRegistration() {
-  const permissions = await chrome.permissions.getAll();
-  const matches = supportedOrigins(permissions.origins);
-  const registrations = await chrome.scripting.getRegisteredContentScripts({
-    ids: [observerScriptId]
-  });
-
-  if (matches.length === 0) {
-    if (registrations.length > 0) {
-      await chrome.scripting.unregisterContentScripts({ ids: [observerScriptId] });
-    }
-    return;
-  }
-
-  const registration = {
-    id: observerScriptId,
-    matches,
-    js: ["content.js"],
-    allFrames: true,
-    runAt: "document_idle",
-    persistAcrossSessions: true
-  };
-
-  if (registrations.length > 0) {
-    await chrome.scripting.updateContentScripts([registration]);
-  } else {
-    await chrome.scripting.registerContentScripts([registration]);
-  }
-}
-
-let syncQueue = Promise.resolve();
-
-function scheduleObserverSync() {
-  syncQueue = syncQueue
-    .catch(() => {})
-    .then(syncObserverRegistration);
-  return syncQueue;
-}
-
 chrome.runtime.onInstalled.addListener(() => {
-  scheduleObserverSync().catch(console.error);
+  chrome.action.disable().catch(() => {});
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  scheduleObserverSync().catch(console.error);
-});
-
-chrome.permissions.onAdded.addListener(() => {
-  scheduleObserverSync().catch(console.error);
-});
-
-chrome.permissions.onRemoved.addListener(() => {
-  scheduleObserverSync().catch(console.error);
+  chrome.action.disable().catch(() => {});
 });
 
 async function forwardCommandToFrames(tabId, command) {
   const frames = await chrome.webNavigation.getAllFrames({ tabId });
-  const results = await Promise.allSettled(frames.map((frame) => chrome.tabs.sendMessage(
+  const playerFrames = frames.filter((frame) => {
+    try { return staticObserverOrigins.has(`${new URL(frame.url).origin}/*`); }
+    catch { return false; }
+  });
+  const results = await Promise.allSettled(playerFrames.map((frame) => chrome.tabs.sendMessage(
     tabId,
     {
       source: "kult-player-bridge",
@@ -180,6 +125,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "context-check") {
+    sendResponse({ active: isKultSiteUrl(sender.tab?.url) });
+    return undefined;
+  }
+
   if (message.type === "site-probe" && sender.tab?.id != null) {
     inspectTabBridge(sender.tab.id, sender.tab.url)
       .then(sendResponse)
@@ -196,5 +146,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return undefined;
 });
-
-scheduleObserverSync().catch(console.error);

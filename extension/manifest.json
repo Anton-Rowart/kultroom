@@ -1,17 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Kult Player Bridge",
-  "version": "0.4.2",
+  "version": "0.4.4",
   "description": "Связывает видеоплеер с комнатой совместного просмотра Kult.",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "webNavigation"
-  ],
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
   ],
   "action": {
     "default_title": "Kult Player Bridge",
@@ -23,8 +19,6 @@
   "content_scripts": [
     {
       "matches": [
-        "http://127.0.0.1/*",
-        "http://localhost/*",
         "http://194.226.165.6:8787/*"
       ],
       "js": ["content.js"],
