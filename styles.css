@@ -447,6 +447,15 @@ body.panel-collapsed .room-panel {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.participant__connection {
+	display: inline-flex;
+	gap: 5px;
+	align-items: center;
+	color: var(--muted);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
 .participant__badges {
 	display: flex;
 	gap: 4px;
@@ -476,6 +485,10 @@ body.panel-collapsed .room-panel {
 	color: #d1d1d6;
 	font-size: 10px;
 	font-variant-numeric: tabular-nums;
+}
+.participant__telemetry span::before {
+	margin-right: 6px;
+	content: "·";
 }
 .room-footer {
 	display: grid;

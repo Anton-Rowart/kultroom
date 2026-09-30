@@ -175,19 +175,27 @@ function renderParticipants(users = participantsState) {
       you.textContent = "это вы";
       badges.append(you);
     }
-    identity.append(name, badges);
-    const telemetry = document.createElement("span");
-    telemetry.className = "participant__telemetry";
     const quality = connectionQuality(user.telemetry);
+    const connection = document.createElement("span");
+    connection.className = "participant__connection";
+    connection.title = quality.label;
     const qualityDot = document.createElement("i");
     qualityDot.className = `quality-dot quality-dot--${quality.state}`;
+    const latency = document.createElement("span");
+    latency.textContent = Number.isFinite(user.telemetry?.ping) ? `${Math.round(user.telemetry.ping)} мс` : "— мс";
+    connection.append(qualityDot, latency);
+    identity.append(name, connection, badges);
+    const telemetry = document.createElement("span");
+    telemetry.className = "participant__telemetry";
     const position = document.createElement("strong");
     position.textContent = formatTime(user.telemetry?.position);
     const state = document.createElement("span");
-    const playback = user.telemetry ? (user.telemetry.paused ? "пауза" : "играет") : quality.label;
-    const ping = Number.isFinite(user.telemetry?.ping) ? ` · ${Math.round(user.telemetry.ping)} мс` : "";
-    state.textContent = `${playback}${user.telemetry ? ` · ${quality.label}` : ""}${ping}`;
-    telemetry.append(qualityDot, position, state);
+    state.textContent = !user.telemetry
+      ? "ожидаем данные"
+      : user.telemetry.buffering
+        ? "буферизация"
+        : user.telemetry.paused ? "пауза" : "играет";
+    telemetry.append(position, state);
     content.append(identity, telemetry);
     item.append(avatar, content);
     elements.participants.append(item);

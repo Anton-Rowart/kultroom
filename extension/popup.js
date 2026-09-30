@@ -1,4 +1,3 @@
-const kultOrigin = "http://194.226.165.6:8787";
 const playerOrigins = new Set(["https://bulkikim.lol", "https://theatre.stravers.live"]);
 const statusElement = document.querySelector("#status");
 const detailElement = document.querySelector("#detail");
@@ -12,10 +11,18 @@ function setStatus(status, detail, state = "idle") {
 
 async function inspect() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  let origin = "";
-  try { origin = new URL(tab?.url || "").origin; } catch {}
+  if (!tab?.id) {
+    setStatus("Расширение неактивно", "Откройте комнату Kult", "error");
+    return;
+  }
 
-  if (!tab?.id || origin !== kultOrigin) {
+  try {
+    await chrome.tabs.sendMessage(
+      tab.id,
+      { source: "kult-player-bridge", type: "ping" },
+      { frameId: 0 }
+    );
+  } catch {
     setStatus("Расширение неактивно", "Откройте комнату Kult", "error");
     return;
   }
