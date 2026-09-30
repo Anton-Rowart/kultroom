@@ -26,6 +26,8 @@ let lastRemoteRevision = 0;
 let toastTimer = null;
 let extensionBridgeReady = false;
 let lastBridgeNotice = "";
+let participantsState = [];
+let socketPing = null;
 
 function normalizeRoomId(value) {
   const normalized = String(value || "").replace(/\D/g, "").slice(0, 6);
@@ -118,7 +120,25 @@ function renderRole() {
   elements.guestVideoLink.hidden = isHost;
 }
 
-function renderParticipants(users) {
+function formatTime(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const secs = value % 60;
+  return hours > 0
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function connectionQuality(telemetry) {
+  if (!telemetry) return { label: "ожидаем данные", state: "idle" };
+  if (telemetry.buffering || telemetry.readyState < 2 || telemetry.bufferAhead < 0.75) return { label: "буферизация", state: "bad" };
+  if ((telemetry.ping ?? 0) > 300 || telemetry.bufferAhead < 3) return { label: "нестабильно", state: "warn" };
+  return { label: "стабильно", state: "good" };
+}
+
+function renderParticipants(users = participantsState) {
+  participantsState = users;
   elements.participants.replaceChildren();
   elements.participantCount.textContent = String(users.length);
   for (const user of users) {
@@ -127,6 +147,10 @@ function renderParticipants(users) {
     const avatar = document.createElement("span");
     avatar.className = "participant__avatar";
     avatar.textContent = user.name.slice(0, 1).toUpperCase();
+    const content = document.createElement("span");
+    content.className = "participant__content";
+    const identity = document.createElement("span");
+    identity.className = "participant__identity";
     const name = document.createElement("span");
     name.className = "participant__name";
     name.textContent = user.name;
@@ -144,7 +168,21 @@ function renderParticipants(users) {
       you.textContent = "это вы";
       badges.append(you);
     }
-    item.append(avatar, name, badges);
+    identity.append(name, badges);
+    const telemetry = document.createElement("span");
+    telemetry.className = "participant__telemetry";
+    const quality = connectionQuality(user.telemetry);
+    const qualityDot = document.createElement("i");
+    qualityDot.className = `quality-dot quality-dot--${quality.state}`;
+    const position = document.createElement("strong");
+    position.textContent = formatTime(user.telemetry?.position);
+    const state = document.createElement("span");
+    const playback = user.telemetry ? (user.telemetry.paused ? "пауза" : "играет") : quality.label;
+    const ping = Number.isFinite(user.telemetry?.ping) ? ` · ${Math.round(user.telemetry.ping)} мс` : "";
+    state.textContent = `${playback}${user.telemetry ? ` · ${quality.label}` : ""}${ping}`;
+    telemetry.append(qualityDot, position, state);
+    content.append(identity, telemetry);
+    item.append(avatar, content);
     elements.participants.append(item);
   }
 }
@@ -229,6 +267,11 @@ function handleMessage(message) {
     showToast("Создатель изменил ссылку на фильм");
   }
   if (message.type === "PLAYER_COMMAND") applyRoomPlayback(message.playback);
+  if (message.type === "TELEMETRY") {
+    participantsState = participantsState.map((user) => user.userId === message.userId ? { ...user, telemetry: message.telemetry } : user);
+    renderParticipants();
+  }
+  if (message.type === "PONG") socketPing = Math.max(0, Date.now() - Number(message.sentAt || Date.now()));
   if (message.type === "ERROR") {
     if (message.code === "ROOM_EXISTS" && pendingEntrance?.type === "CREATE") {
       roomId = createRoomId();
@@ -273,6 +316,9 @@ window.addEventListener("message", (event) => {
     }
   }
   if (event.data?.source === "kult-extension" && event.data.type === "player-event") sendPlayerEvent(event.data.event);
+  if (event.data?.source === "kult-extension" && event.data.type === "telemetry" && roomJoined) {
+    send({ type: "TELEMETRY", roomId, telemetry: { ...event.data.telemetry, ping: socketPing } });
+  }
 });
 
 elements.lobbyForm.addEventListener("submit", (event) => {
@@ -345,6 +391,7 @@ function pingExtensionBridge() {
 }
 
 setInterval(pingExtensionBridge, 1500);
+setInterval(() => { if (roomJoined) send({ type: "PING", sentAt: Date.now() }); }, 5000);
 setTimeout(() => {
   if (roomJoined && !extensionBridgeReady) elements.playerStatus.textContent = "Расширение не подключено · установите или обновите его";
 }, 4000);

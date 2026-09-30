@@ -24,7 +24,7 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 function sanitizeRoomId(value) { const roomId = String(value || "").replace(/\D/g, "").slice(0, 6); return roomId.length === 6 ? roomId : null; }
 function sanitizeName(value) { return String(value || "Гость").trim().slice(0, 32) || "Гость"; }
 function sanitizeVideoUrl(value) { try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : null; } catch { return null; } }
-function roomUsers(room) { return [...room.users.values()].map(({ userId, name, isHost }) => ({ userId, name, isHost })); }
+function roomUsers(room) { return [...room.users.values()].map(({ userId, name, isHost, telemetry }) => ({ userId, name, isHost, telemetry: telemetry || null })); }
 function send(socket, payload) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload)); }
 function broadcast(room, payload, except = null) { for (const user of room.users.values()) if (user.socket !== except) send(user.socket, payload); }
 function removeFromRoom(socket) {
@@ -42,7 +42,7 @@ function handleCreate(socket, message) {
   removeFromRoom(socket);
   const room = { id: roomId, hostToken, users: new Map(), videoUrl, playback: { playing: false, position: 0, updatedAt: Date.now(), revision: 0 } };
   rooms.set(roomId, room); socket.roomId = roomId; socket.userId = userId; socket.isHost = true;
-  room.users.set(socket, { userId, name: sanitizeName(message.name), isHost: true, socket });
+  room.users.set(socket, { userId, name: sanitizeName(message.name), isHost: true, telemetry: null, socket });
   send(socket, roomState(room, socket));
 }
 function handleJoin(socket, message) {
@@ -51,7 +51,7 @@ function handleJoin(socket, message) {
   const room = rooms.get(roomId);
   if (!room) { send(socket, { type: "ERROR", code: "ROOM_NOT_FOUND", message: "Комната не найдена или уже закрыта" }); return; }
   removeFromRoom(socket); socket.roomId = roomId; socket.userId = userId; socket.isHost = String(message.hostToken || "") === room.hostToken;
-  room.users.set(socket, { userId, name: sanitizeName(message.name), isHost: socket.isHost, socket });
+  room.users.set(socket, { userId, name: sanitizeName(message.name), isHost: socket.isHost, telemetry: null, socket });
   send(socket, roomState(room, socket));
   broadcast(room, { type: "USERS", users: roomUsers(room) }, socket);
 }
@@ -70,6 +70,29 @@ function handlePlayerEvent(socket, message) {
   room.playback = { playing, position, updatedAt: Date.now(), revision: room.playback.revision + 1 };
   broadcast(room, { type: "PLAYER_COMMAND", playback: room.playback }, socket);
 }
+function finiteNumber(value, fallback = null, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+function handleTelemetry(socket, message) {
+  const room = rooms.get(socket.roomId); const user = room?.users.get(socket); const input = message.telemetry || {};
+  if (!room || !user) return;
+  user.telemetry = {
+    position: finiteNumber(input.position, 0, 0, 60 * 60 * 24),
+    duration: finiteNumber(input.duration, null, 0, 60 * 60 * 24),
+    paused: Boolean(input.paused),
+    buffering: Boolean(input.buffering),
+    readyState: finiteNumber(input.readyState, 0, 0, 4),
+    bufferAhead: finiteNumber(input.bufferAhead, 0, 0, 60 * 60),
+    ping: finiteNumber(input.ping, null, 0, 60_000),
+    downlink: finiteNumber(input.downlink, null, 0, 10_000),
+    effectiveType: String(input.effectiveType || "").slice(0, 12) || null,
+    droppedFrames: finiteNumber(input.droppedFrames, null, 0),
+    totalFrames: finiteNumber(input.totalFrames, null, 0),
+    updatedAt: Date.now()
+  };
+  broadcast(room, { type: "TELEMETRY", userId: user.userId, telemetry: user.telemetry });
+}
 wss.on("connection", (socket) => {
   socket.isAlive = true; socket.on("pong", () => { socket.isAlive = true; });
   socket.on("message", (buffer) => {
@@ -78,6 +101,8 @@ wss.on("connection", (socket) => {
     else if (message.type === "JOIN") handleJoin(socket, message);
     else if (message.type === "SET_VIDEO") handleSetVideo(socket, message);
     else if (message.type === "PLAYER_EVENT") handlePlayerEvent(socket, message);
+    else if (message.type === "TELEMETRY") handleTelemetry(socket, message);
+    else if (message.type === "PING") send(socket, { type: "PONG", sentAt: finiteNumber(message.sentAt, Date.now(), 0) });
   });
   socket.on("close", () => removeFromRoom(socket));
 });

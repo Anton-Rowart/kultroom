@@ -1,5 +1,5 @@
 (() => {
-  const bridgeVersion = "0.4.4";
+  const bridgeVersion = "0.5.0";
 
   if (globalThis.__kultPlayerBridgeInstalled === bridgeVersion) {
     return;
@@ -9,6 +9,7 @@
 
   const unlockButtonId = "kult-player-bridge-unlock";
   const observedVideos = new WeakSet();
+  const playbackHealth = new WeakMap();
   let applyingRemoteCommand = 0;
   let suppressEventsUntil = 0;
   const playControlSelectors = [
@@ -90,10 +91,55 @@
     }
 
     observedVideos.add(video);
+    playbackHealth.set(video, { buffering: video.readyState < 2 });
     video.addEventListener("play", () => emitPlayerEvent("play", video));
     video.addEventListener("pause", () => emitPlayerEvent("pause", video));
     video.addEventListener("seeked", () => emitPlayerEvent("seek", video));
     video.addEventListener("ratechange", () => emitPlayerEvent("ratechange", video));
+    video.addEventListener("waiting", () => { playbackHealth.get(video).buffering = true; });
+    video.addEventListener("stalled", () => { playbackHealth.get(video).buffering = true; });
+    video.addEventListener("playing", () => { playbackHealth.get(video).buffering = false; });
+    video.addEventListener("canplay", () => { playbackHealth.get(video).buffering = false; });
+  }
+
+  function primaryVideo() {
+    const videos = getTargetVideos();
+    return videos.find((video) => !video.paused && video.readyState > 0)
+      || videos.find((video) => video.readyState > 0)
+      || videos[0];
+  }
+
+  function bufferAhead(video) {
+    if (!video.buffered) return 0;
+    for (let index = 0; index < video.buffered.length; index += 1) {
+      if (video.buffered.start(index) <= video.currentTime && video.buffered.end(index) >= video.currentTime) {
+        return Math.max(0, video.buffered.end(index) - video.currentTime);
+      }
+    }
+    return 0;
+  }
+
+  function emitTelemetry() {
+    const video = primaryVideo();
+    if (!video) return;
+    const quality = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
+    chrome.runtime.sendMessage({
+      source: "kult-player-bridge",
+      type: "telemetry",
+      telemetry: {
+        position: Number(video.currentTime.toFixed(3)),
+        duration: Number.isFinite(video.duration) ? Number(video.duration.toFixed(3)) : null,
+        paused: video.paused,
+        buffering: playbackHealth.get(video)?.buffering === true,
+        readyState: video.readyState,
+        bufferAhead: Number(bufferAhead(video).toFixed(2)),
+        downlink: Number.isFinite(navigator.connection?.downlink) ? navigator.connection.downlink : null,
+        effectiveType: navigator.connection?.effectiveType || null,
+        droppedFrames: quality?.droppedVideoFrames ?? null,
+        totalFrames: quality?.totalVideoFrames ?? null,
+        emittedAt: Date.now()
+      }
+    }).catch(() => {});
   }
 
   function observeAllVideos() {
@@ -251,23 +297,21 @@
     const button = document.createElement("button");
     button.id = unlockButtonId;
     button.type = "button";
-    button.textContent = "▶ Активировать видео для синхронизации";
+    button.innerHTML = "<span style=\"display:grid;gap:8px;max-width:360px;padding:22px 26px;border:1px solid rgba(255,255,255,.22);border-radius:22px;background:rgba(20,20,22,.82);box-shadow:0 24px 80px rgba(0,0,0,.38);color:#fff;text-align:center\"><strong style=\"font-size:16px;letter-spacing:-.01em\">Активировать плеер</strong><small style=\"color:rgba(255,255,255,.62);font:13px/1.4 system-ui\">Один клик — и синхронизация готова</small></span>";
     button.setAttribute("aria-label", "Активировать видео для совместного просмотра");
     button.style.cssText = [
       "position:fixed",
-      "left:50%",
-      "top:50%",
-      "transform:translate(-50%,-50%)",
+      "inset:0",
       "z-index:2147483647",
-      "min-width:260px",
-      "min-height:54px",
-      "padding:14px 20px",
-      "border:1px solid rgba(255,255,255,.24)",
-      "border-radius:14px",
-      "background:linear-gradient(135deg,#7c3aed,#c026d3)",
-      "box-shadow:0 18px 50px rgba(0,0,0,.55)",
-      "color:#fff",
-      "font:700 15px system-ui,-apple-system,sans-serif",
+      "display:grid",
+      "width:100%",
+      "height:100%",
+      "padding:24px",
+      "place-items:center",
+      "border:0",
+      "background:rgba(6,6,8,.32)",
+      "backdrop-filter:blur(22px) saturate(.75)",
+      "-webkit-backdrop-filter:blur(22px) saturate(.75)",
       "cursor:pointer"
     ].join(";");
 
@@ -275,7 +319,7 @@
       event.preventDefault();
       event.stopPropagation();
       button.disabled = true;
-      button.textContent = "Подготавливаю плеер…";
+      button.innerHTML = "<span style=\"padding:16px 20px;border-radius:18px;background:rgba(20,20,22,.82);color:#fff;font:600 14px system-ui\">Подготавливаем видео…</span>";
 
       applyingRemoteCommand += 1;
       suppressEventsUntil = Date.now() + 1500;
@@ -297,14 +341,17 @@
 
         if (hasPlayerControl) {
           clickPlayerPauseControl();
-        } else {
-          for (const video of videos) video.pause();
+        }
+
+        for (const video of videos) {
+          video.pause();
+          try { video.currentTime = 0; } catch {}
         }
 
         button.remove();
       } catch (error) {
         button.disabled = false;
-        button.textContent = `Не получилось: ${error?.message || String(error)}`;
+        button.innerHTML = `<span style="padding:16px 20px;border-radius:18px;background:rgba(20,20,22,.88);color:#fff;font:600 14px system-ui">Не получилось. Нажмите ещё раз</span>`;
       } finally {
         applyingRemoteCommand = Math.max(0, applyingRemoteCommand - 1);
         suppressEventsUntil = Date.now() + 700;
@@ -406,6 +453,8 @@
     if (!status?.active) return;
     observeAllVideos();
     videoObserver.observe(document.documentElement, { childList: true, subtree: true });
+    emitTelemetry();
+    setInterval(emitTelemetry, 1000);
   }).catch(() => {});
 
   if (window === window.top) {
@@ -479,6 +528,12 @@
         type: "player-event",
         event: message.event
       }, location.origin);
+      sendResponse({ ok: true });
+      return undefined;
+    }
+
+    if (message.type === "forward-telemetry" && window === window.top) {
+      window.postMessage({ source: "kult-extension", type: "telemetry", telemetry: message.telemetry }, location.origin);
       sendResponse({ ok: true });
       return undefined;
     }

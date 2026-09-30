@@ -111,6 +111,17 @@ async function handlePlayerEvent(message, sender) {
   return { ok: true };
 }
 
+async function handleTelemetry(message, sender) {
+  const tabId = sender.tab?.id;
+  if (tabId == null || !isKultSiteUrl(sender.tab?.url)) return { ok: false, ignored: true };
+  await chrome.tabs.sendMessage(tabId, {
+    source: "kult-player-bridge",
+    type: "forward-telemetry",
+    telemetry: message.telemetry
+  }, { frameId: 0 });
+  return { ok: true };
+}
+
 chrome.webNavigation.onCommitted?.addListener((details) => {
   if (details.frameId === 0) setActionState(details.tabId, isKultSiteUrl(details.url) ? "waiting" : "off");
 });
@@ -122,6 +133,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "player-event") {
     handlePlayerEvent(message, sender).then(sendResponse).catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (message.type === "telemetry") {
+    handleTelemetry(message, sender).then(sendResponse).catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
   }
 

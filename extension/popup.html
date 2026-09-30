@@ -3,40 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kult Player Bridge</title>
+    <title>Kult</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main>
-      <header>
-        <span class="logo">K</span>
-        <div>
-          <h1>Kult Player Bridge</h1>
-          <p>Управление видео во вложенных iframe</p>
-        </div>
-      </header>
-
-      <section class="panel">
-        <div class="label">Найденные домены</div>
-        <div id="origins" class="origins">
-          <span class="muted">Проверяю текущую вкладку…</span>
-        </div>
-        <button id="connect" class="primary" type="button">Подключить плеер</button>
+      <header><span class="logo">K</span><span class="brand">Kult</span></header>
+      <section class="status-card">
+        <span id="dot" class="dot"></span>
+        <div><strong id="status">Проверяем плеер…</strong><p id="detail">Подождите несколько секунд</p></div>
       </section>
-
-      <section class="panel controls">
-        <div class="status-row">
-          <span id="dot" class="dot"></span>
-          <span id="status">Плеер ещё не подключён</span>
-        </div>
-        <p class="hint">Используйте штатные кнопки Play, Pause и перемотки внутри видеоплеера.</p>
-        <div id="last-event" class="last-event">Событий плеера пока не было</div>
-        <button id="rescan" class="secondary" type="button">Проверить ещё раз</button>
-      </section>
-
-      <pre id="details" class="details" hidden></pre>
+      <p class="note">Управление включается одной кнопкой внутри плеера.</p>
     </main>
-
     <script src="popup.js"></script>
   </body>
 </html>
