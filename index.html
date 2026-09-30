@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Kult Watch Party</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="lobby">
+    <main id="lobby" class="lobby">
+      <section class="lobby-card">
+        <div class="lobby-brand"><span class="brand-mark">K</span><span>Kult</span></div>
+        <p class="eyebrow">Совместный просмотр</p>
+        <h1 id="lobby-title">Создать комнату</h1>
+        <p id="lobby-description" class="lobby-description">Назовитесь, добавьте ссылку на фильм и отправьте комнату друзьям.</p>
+        <form id="lobby-form" class="lobby-form">
+          <label class="field-label" for="session-name">Ваше имя</label>
+          <input id="session-name" class="text-input" type="text" maxlength="32" placeholder="Например, Антон" autocomplete="off" required />
+          <div id="create-video-field">
+            <label class="field-label" for="create-video-url">Ссылка на фильм</label>
+            <input id="create-video-url" class="text-input" type="url" placeholder="https://…" autocomplete="off" required />
+          </div>
+          <p id="lobby-error" class="field-error" role="alert"></p>
+          <button id="lobby-submit" class="primary-button" type="submit">Создать комнату</button>
+        </form>
+      </section>
+    </main>
+
+    <iframe id="movie-frame" class="movie-frame" title="Видеоплеер" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+    <button id="panel-toggle" class="panel-toggle" type="button" aria-label="Скрыть комнату" aria-expanded="true">
+      <span class="panel-toggle__open">K</span><span class="panel-toggle__close">×</span>
+    </button>
+
+    <aside id="room-panel" class="room-panel" aria-label="Панель комнаты">
+      <header class="room-header">
+        <div class="brand-mark">K</div>
+        <div><div class="eyebrow">Совместный просмотр</div><h2>Kult Room</h2></div>
+      </header>
+      <div id="connection" class="connection" data-state="connecting">
+        <span class="connection__dot"></span><span id="connection-text">Подключение…</span>
+      </div>
+      <section class="room-section">
+        <div class="field-label">Ссылка на фильм</div>
+        <div id="host-video-control" class="url-control">
+          <input id="video-url" type="url" placeholder="https://…" autocomplete="off" />
+          <button id="apply-url" class="icon-button" type="button" aria-label="Открыть ссылку">→</button>
+        </div>
+        <a id="guest-video-link" class="guest-video-link" target="_blank" rel="noreferrer"></a>
+        <p id="url-error" class="field-error" role="alert"></p>
+      </section>
+      <section class="room-section room-actions">
+        <button id="share-room" class="share-button" type="button"><span>Поделиться комнатой</span><span aria-hidden="true">↗</span></button>
+        <div class="room-code"><span>Комната</span><strong id="room-code">—</strong></div>
+      </section>
+      <section class="room-section participants-section">
+        <div class="section-heading"><span>Участники</span><span id="participant-count" class="count">0</span></div>
+        <ul id="participants" class="participants"></ul>
+      </section>
+      <footer class="room-footer">
+        <span id="player-status" class="player-status">Проверяю расширение…</span>
+        <span class="room-hint">Управляйте видео штатными кнопками</span>
+      </footer>
+    </aside>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
