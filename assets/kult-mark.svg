@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">KultRoom</title>
+  <desc id="desc">Буква K, диагонали которой образуют луч кинопроектора</desc>
+  <defs>
+    <linearGradient id="beam-up" x1="208" y1="254" x2="430" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64B5FF"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+    <linearGradient id="beam-down" x1="208" y1="258" x2="430" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64B5FF"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="120" fill="#F5F5F7"/>
+  <path d="M151 126V386" stroke="#111113" stroke-width="58" stroke-linecap="round"/>
+  <path d="M203 248L402 91Q411 84 417 96L444 137Q450 148 438 153L217 270Z" fill="url(#beam-up)"/>
+  <path d="M217 242L438 359Q450 364 444 375L417 416Q411 428 402 421L203 264Z" fill="url(#beam-down)"/>
+  <circle cx="207" cy="256" r="31" fill="#111113"/>
+  <circle cx="207" cy="256" r="15" fill="#F5F5F7"/>
+</svg>

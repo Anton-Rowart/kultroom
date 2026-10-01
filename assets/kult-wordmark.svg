@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 320" role="img" aria-labelledby="title desc">
+  <title id="title">KultRoom</title>
+  <desc id="desc">Текстовый логотип KultRoom со знаком-прожектором</desc>
+  <defs>
+    <linearGradient id="word-beam-up" x1="112" y1="160" x2="225" y2="86" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64B5FF"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+    <linearGradient id="word-beam-down" x1="112" y1="160" x2="225" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64B5FF"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="272" height="272" rx="76" fill="#F5F5F7"/>
+  <path d="M99 82V238" stroke="#111113" stroke-width="36" stroke-linecap="round"/>
+  <path d="M130 155L244 70Q250 66 254 73L270 98Q274 105 267 108L138 168Z" fill="url(#word-beam-up)"/>
+  <path d="M138 152L267 212Q274 215 270 222L254 247Q250 254 244 250L130 165Z" fill="url(#word-beam-down)"/>
+  <circle cx="132" cy="160" r="19" fill="#111113"/>
+  <circle cx="132" cy="160" r="9" fill="#F5F5F7"/>
+  <text x="344" y="194" fill="#F5F5F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, Arial, sans-serif" font-size="112" letter-spacing="-5">
+    <tspan font-weight="720">Kult</tspan><tspan fill="#A1A1A6" font-weight="480">Room</tspan>
+  </text>
+</svg>

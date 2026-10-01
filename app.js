@@ -1,6 +1,7 @@
 const elements = {
   applyUrl: document.querySelector("#apply-url"), connection: document.querySelector("#connection"), connectionText: document.querySelector("#connection-text"),
   createVideoField: document.querySelector("#create-video-field"), createVideoUrl: document.querySelector("#create-video-url"), frame: document.querySelector("#movie-frame"),
+  createNewRoom: document.querySelector("#create-new-room"), expiredRoom: document.querySelector("#expired-room"),
   guestVideoLink: document.querySelector("#guest-video-link"), hostVideoControl: document.querySelector("#host-video-control"), lobbyDescription: document.querySelector("#lobby-description"),
   lobbyError: document.querySelector("#lobby-error"), lobbyForm: document.querySelector("#lobby-form"), lobbySubmit: document.querySelector("#lobby-submit"),
   lobbyTitle: document.querySelector("#lobby-title"), participants: document.querySelector("#participants"), participantCount: document.querySelector("#participant-count"),
@@ -93,6 +94,35 @@ function configureLobby() {
   elements.createVideoField.hidden = joining;
   elements.createVideoUrl.required = !joining;
   elements.lobbySubmit.textContent = joining ? "Войти в комнату" : "Создать комнату";
+}
+
+function showExpiredRoom() {
+  const expiredRoomId = roomId;
+  clearTimeout(joinTimer);
+  clearTimeout(reconnectTimer);
+  pendingEntrance = null;
+  roomJoined = false;
+  isHost = false;
+  roomId = "";
+  hostToken = "";
+  currentVideoUrl = "";
+  lastRemoteRevision = 0;
+  participantsState = [];
+  socketPing = null;
+  if (expiredRoomId) sessionStorage.removeItem(`kult-host-token:${expiredRoomId}`);
+  const failedSocket = socket;
+  try { failedSocket?.close(); } catch {}
+  const url = new URL(location.href);
+  url.searchParams.delete("room");
+  history.replaceState(null, "", url);
+  elements.frame.removeAttribute("src");
+  document.body.classList.remove("panel-collapsed");
+  document.body.dataset.view = "lobby";
+  elements.lobbyTitle.textContent = "Комната закрыта";
+  elements.lobbyError.textContent = "";
+  elements.lobbySubmit.disabled = false;
+  elements.lobbyForm.hidden = true;
+  elements.expiredRoom.hidden = false;
 }
 
 function setRoomUrl() {
@@ -295,6 +325,10 @@ function handleMessage(message) {
       send(pendingEntrance);
       return;
     }
+    if (message.code === "ROOM_NOT_FOUND") {
+      showExpiredRoom();
+      return;
+    }
     elements.lobbySubmit.disabled = false;
     elements.lobbyError.textContent = message.message || "Ошибка комнаты";
     if (roomJoined) showToast(message.message || "Ошибка комнаты");
@@ -372,6 +406,14 @@ elements.lobbyForm.addEventListener("submit", (event) => {
     pendingEntrance = { type: "CREATE", roomId, userId, name: userName, videoUrl, hostToken };
   }
   connectSocket();
+});
+
+elements.createNewRoom.addEventListener("click", () => {
+  elements.expiredRoom.hidden = true;
+  elements.lobbyForm.hidden = false;
+  elements.createVideoUrl.value = "";
+  configureLobby();
+  elements.createVideoUrl.focus();
 });
 
 elements.toggle.addEventListener("click", () => {

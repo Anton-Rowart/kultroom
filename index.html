@@ -5,13 +5,20 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="color-scheme" content="dark" />
 		<title>Kult Watch Party</title>
+		<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+		<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png" />
+		<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
 		<link rel="stylesheet" href="/styles.css" />
 	</head>
 	<body data-view="lobby">
 		<main id="lobby" class="lobby">
 			<section class="lobby-card">
-				<div class="lobby-brand"><span class="brand-mark">K</span><span>KultRoom</span></div>
+				<div class="lobby-brand"><img class="brand-wordmark" src="/assets/kult-wordmark.svg" alt="KultRoom" /></div>
 				<h1 id="lobby-title">Создать комнату</h1>
+				<div id="expired-room" class="expired-room" hidden>
+					<p>Эта комната больше не существует. Создайте новую и отправьте друзьям свежую ссылку.</p>
+					<button id="create-new-room" class="primary-button" type="button">Создать новую комнату</button>
+				</div>
 				<form id="lobby-form" class="lobby-form">
 					<label class="field-label" for="session-name">Ваше имя</label>
 					<input id="session-name" class="text-input" type="text" maxlength="32" placeholder="Ваше имя" autocomplete="off" required />
@@ -32,11 +39,13 @@
 			allow="autoplay; fullscreen; picture-in-picture"
 			allowfullscreen
 		></iframe>
-		<button id="panel-toggle" class="panel-toggle" type="button" aria-label="Открыть комнату" aria-expanded="false">K</button>
+		<button id="panel-toggle" class="panel-toggle" type="button" aria-label="Открыть комнату" aria-expanded="false">
+			<img src="/assets/favicon.svg" alt="" />
+		</button>
 
 		<aside id="room-panel" class="room-panel" aria-label="Панель комнаты">
 			<header class="room-header">
-				<div class="brand-mark">K</div>
+				<img class="brand-mark" src="/assets/kult-mark.svg" alt="" />
 				<div>
 					<h2>KultRoom</h2>
 				</div>
