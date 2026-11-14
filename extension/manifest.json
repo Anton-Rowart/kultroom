@@ -27,7 +27,7 @@
   "content_scripts": [
     {
       "matches": [
-        "http://194.226.165.6:8787/*"
+        "http://193.124.67.136:8787/*"
       ],
       "js": ["content.js"],
       "all_frames": false,

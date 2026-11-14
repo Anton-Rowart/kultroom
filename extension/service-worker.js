@@ -6,7 +6,7 @@ const staticObserverOrigins = new Set([
 function isKultSiteUrl(urlString) {
   try {
     const url = new URL(urlString);
-    return url.protocol === "http:" && url.host === "194.226.165.6:8787";
+    return url.protocol === "http:" && url.host === "193.124.67.136:8787";
   } catch {
     return false;
   }
