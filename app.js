@@ -30,6 +30,9 @@ let extensionBridgeReady = false;
 let lastBridgeNotice = "";
 let participantsState = [];
 let socketPing = null;
+let pendingRemotePlayback = null;
+let remotePlaybackSent = false;
+let playerBridgeConnected = false;
 
 function normalizeRoomId(value) {
   const normalized = String(value || "").replace(/\D/g, "").slice(0, 6);
@@ -109,6 +112,9 @@ function showExpiredRoom() {
   lastRemoteRevision = 0;
   participantsState = [];
   socketPing = null;
+  pendingRemotePlayback = null;
+  remotePlaybackSent = false;
+  playerBridgeConnected = false;
   if (expiredRoomId) sessionStorage.removeItem(`kult-host-token:${expiredRoomId}`);
   const failedSocket = socket;
   try { failedSocket?.close(); } catch {}
@@ -146,6 +152,8 @@ function renderVideoUrl(url) {
   elements.guestVideoLink.href = parsed;
   elements.guestVideoLink.textContent = parsed;
   if (changed) {
+    playerBridgeConnected = false;
+    remotePlaybackSent = false;
     elements.frame.src = parsed;
     setPlayerStatus("Плеер загружается…");
   }
@@ -283,13 +291,22 @@ function currentPlaybackPosition(playback) {
     : playback?.position || 0;
 }
 
-function applyRoomPlayback(playback) {
-  if (!playback || playback.revision <= lastRemoteRevision) return;
-  lastRemoteRevision = playback.revision;
+function flushRemotePlayback() {
+  if (!pendingRemotePlayback || remotePlaybackSent || !extensionBridgeReady || !playerBridgeConnected) return;
+  const playback = pendingRemotePlayback;
+  remotePlaybackSent = true;
   window.postMessage({ source: "kult-site", type: "remote-command", command: {
     action: playback.playing ? "play" : "pause",
     position: currentPlaybackPosition(playback), revision: playback.revision
   } }, location.origin);
+}
+
+function applyRoomPlayback(playback) {
+  if (!playback || playback.revision <= lastRemoteRevision) return;
+  lastRemoteRevision = playback.revision;
+  pendingRemotePlayback = playback;
+  remotePlaybackSent = false;
+  flushRemotePlayback();
 }
 
 function handleMessage(message) {
@@ -349,6 +366,8 @@ window.addEventListener("message", (event) => {
   if (event.data?.source === "kult-extension" && event.data.type === "bridge-ready") {
     extensionBridgeReady = true;
     const status = event.data.status || {};
+    playerBridgeConnected = status.playerConnected === true;
+    flushRemotePlayback();
     if (status.missingOrigins?.length) {
       setPlayerStatus("Расширению нужен доступ к видеоплееру");
       if (lastBridgeNotice !== "permission") showToast("Откройте расширение и разрешите доступ к плееру");
@@ -372,6 +391,8 @@ window.addEventListener("message", (event) => {
       setPlayerStatus("Плеер активирован · 00:00 · пауза");
       lastBridgeNotice = "ready";
       showToast("Плеер активирован и готов");
+      remotePlaybackSent = false;
+      flushRemotePlayback();
     } else {
       setPlayerStatus("Нажмите «Активировать плеер»");
       lastBridgeNotice = "activation";
